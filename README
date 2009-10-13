@@ -1,0 +1,8 @@
+Server setup
+============
+
+Jabber server should be configured for:
+
+0) service (external component) should be properly configured using password (no SASL). In this document we assume that you configure your service as name pubpresence.$domain$
+1) JID pubpresence.$domain$ should be granted admin rights (to be able to issue admin commands, like user-stats)
+2) pubsub component should allow our service to create and configure nodes
