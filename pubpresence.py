@@ -170,15 +170,48 @@ class PublishPresence(PresenceProtocol):
         Processs change of presence of user
         """
         
+        def process_newpresence(userstats):
+            """
+            publish new payload
+            """
+            
+            #make new item which would be published
+            #TODO: serializing and deserializing should take place in separate func
+            payload = domish.Element((None,"user"))
+            for k,v in userstats.items():
+                payload[k] = v
+            payload['status'] = status
+            
+            item = Item(payload=payload)
+            
+            #actually publish item
+            self.pubsub_client.publish(JID("pubsub.%s"%domain),PUB_NODE_LIVE,items=[item],sender=JID(comp_name))
+            
+        d = self.get_userstats(user,comp_name,domain)
+        d.addCallback(process_newpresence)
+        
+    
+    def get_userstats(self,user,comp_name,domain):
+        """
+        Get stats of user. Accepts params:
+        
+        user - user jid
+        comp_name - component name which should receive answer (usually we are)
+        domain - our domain
+        
+        returns callback with one cb added - it converts answer to dict with fields name,fulljid,ip,status
+        """
+    
         def process_stats(item):
             """
             Process result of user-stats command
             
-            Extract IP address and publish it via pubsub
+            Extract IP address and related info and returns it as dict
             """
             x = xpath.queryForNodes("//x/field[@var='ipaddresses']",item)
             if not x:
-                return
+                raise ValueError, "Wrong response from stats-request"
+                
             frm = Form.fromElement(x[0])
             values = frm.getValues()
             jid = JID(values['accountjid'])
@@ -186,19 +219,13 @@ class PublishPresence(PresenceProtocol):
             
             ip, port = ipport.split(':')
 
-            #make new item which would be published
-            #TODO: serializing and deserializing should take place in separate func
-            payload = domish.Element((None,"user"))
-            payload['name'] = jid.userhost()
-            payload['fulljid'] = jid.full() #full jid which causes current change, i.e. which is user actualy uses
-            payload['ip'] = ip
-            payload['status'] = status
-            
-            item = Item(payload=payload)
-            
-            #actually publish item
-            self.pubsub_client.publish(JID("pubsub.%s"%domain),PUB_NODE_LIVE,items=[item],sender=JID(comp_name))
+            userstats = dict()
+            userstats['name'] = jid.userhost()
+            userstats['fulljid'] = jid.full() #full jid which causes current change, i.e. which is user actualy uses
+            userstats['ip'] = ip
+            return userstats
         
+    
         #TODO: implement error handling if ACL doesn't allows us to call admin command
         iq = IQ(self.xmlstream)
         iq['to'] = domain
@@ -212,7 +239,7 @@ class PublishPresence(PresenceProtocol):
         cmd.addChild(frm.toElement())
         d = iq.send(domain)
         d.addCallback(process_stats)
-        
+        return d
         
     def _getParts(self,presence):
         return presence.sender,presence.recipient
