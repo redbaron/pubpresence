@@ -115,7 +115,7 @@ class PublishPresence(PresenceProtocol):
         
     def announce_online(self):
         self.online = True
-        print '!!! announce online'
+
         frm = Form('result')
         frm.addField( Field(var='pubpresence#status',value='online') )
         item = Item(payload=frm.toElement())
