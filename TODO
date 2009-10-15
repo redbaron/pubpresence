@@ -1,3 +1,4 @@
 * Logging
 * Error handling if no rights
 * Intellectual behaviour in case of multiple connections
+* Move config to ini file, not plain Python
