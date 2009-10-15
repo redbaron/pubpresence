@@ -1,0 +1,8 @@
+# -*- coding: utf-8 -*-
+EXT_HOST = 'localhost'
+EXT_PORT = 5555
+SECRET = 'secret'
+DOMAIN = 'example.com'
+LOG_TRAFFIC = True
+NAME = 'pubpresence.%s'%DOMAIN #the name of component defined in jabber server
+PUBSUB_NAME = 'pubsub.%s'%DOMAIN #name of pubsub service

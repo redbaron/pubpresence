@@ -13,14 +13,9 @@ from wokkel.pubsub import PubSubClient
 from pubpresence import PublishPresence
 
 # Configuration parameters
+from .config import EXT_HOST,EXT_PORT,SECRET,DOMAIN,LOG_TRAFFIC,\
+                    NAME,PUBSUB_NAME
 
-EXT_HOST = 'localhost'
-EXT_PORT = 8888
-SECRET = 'secret'
-DOMAIN = 'example.com'
-LOG_TRAFFIC = True
-NAME = 'pubpresence.%s'%DOMAIN #the name of component defined in jabber server
-PUBSUB_NAME = 'pubsub.%s'%DOMAIN #name of pubsub service
 
 
 # Set up the Twisted application
