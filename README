@@ -7,42 +7,25 @@ Jabber server should be configured for:
 1) JID pubpresence.$domain$ should be granted admin rights (to be able to issue admin commands, like user-stats)
 2) pubsub component should allow our service to create and configure nodes
 
-Clients should add pubpresence.$domain$ to their roster or it should be placed there by other ways
-
+Jabber users should add pubpresence.$domain$ to their roster or it should be placed there by other ways
 
 Client behaviour
 ================
 
 Client which tries to use pubpresence service should do the following
 
-1) ask for presence status of pubpresence.$domain$ if it's online then  look at normal startup
-2.a) if no answer, then pubpresence is offline, we should subscribe on presence/status and wait "init" payload there, then proceed to 3)
-2.b) if answer is not "online" then we in the middle of initialization, subscribe on presence/status and proceed to 3)
+0) ask for presence status of pubpresence.$domain$ if it is online than pubpresence node contents is uptodate
+1) subscribe on pubpresence node and keep all evence you'll receive there,do not process them
+2) fetch all items from pubpresence, that's the current state of users connections
+3) now you could process all collected from 1) items and further events on pubpresence node
 
-3) subscribe on presence/live and discard all items which you receive there for now
-4) as soon as you received "online" on presence/status fetch all items from presence/active, thats the current state
-5) now you can process all items in presence/live normally
+This sequence should not be violated to avoid small race condition when you fetche all items and only then subscribe on new ones.
 
-please note that inial state discovery of users presence could be inaccurate if mulitple connections are allowd and multiple non-away user connections found
+Please note that events you received on 1) rarely could be similair to state of users you get in 2)
 
+If you receive purge notification it mean that pubpresence service was just started/restarted on now it's populated node with items again
 
-normal statup
--------------
-1) subscribe on presence/live and discard all items you'll receive there
-2) fetch all items from presence/active, that's the current state of users connections
-3) now you could process any further events on presence/live as normal users activity.
-
-
-any time you could send probe presence to pubpresence service and it would reply with online presence if everything goes fine.
-
-Design decisions
-================
-
-We have two nodes non persistent "live"  and persistent "active" for the 
-reasons of simplicity of clients. It simply fetches current state from "active"
-and then receives users activity on live node. Otherwise it should be too complicated for client
-it will have to process deletion of item in only node and appearence of new nodes.
-
+Alose please note that inial state discovery of users presence could be inaccurate if mulitple connections are allowed and multiple non-away user connections found
 
 
 Reference
@@ -52,15 +35,13 @@ Created nodes
 -------------
 
 We create these nodes:
- * presence/live   - live events of each user presence (non persistent node)
- * presence/actual - always uptodate list with all users statuses (persisten node)
- * presence/status - pubpresence service status
+ * pupresence - always uptodate list with all users statuses (persisten node)
 
 Published userinfo items
 ------------------------
 
 On pubsub nodes we publish items with this content (<item> tag is part of pubsub standart)::
-<item><user status='online' ip='ip_addr' name='name@domain' fulljid='name@domain/resource'/></item>
+<item id='name@domain'><user status='online' ip='ip_addr' name='name@domain' fulljid='name@domain/resource'/></item>
 
 Where status could be one of:
  * online - plain online
@@ -68,20 +49,11 @@ Where status could be one of:
  * away - away
  * xa - really away
  * chat - ready for chat
-    
-Published status items
-----------------------
-
-To announce it's status we publish this kind of items on presence/status node::
-<item><x xmlns='jabber:x:data' type='result'><field var='pubpresence#status'><value>online</value></field></x></item>
-
-As you can see it's standard dataform with only field "pubpresence#status" and two possible values:
- * online - service operate and every node it up to date
- * init - service is in initialization state, please follow instructions how to avoid possible race conditions
  
+ Updates to user state are published under same item ID.
+     
 Presence responses
 ------------------
-Any time you like you could probe for service presence, the responses could be:
- * standart presence stanza, means "online"
- * "dnd" status, means we are in init state and published nodes are not up to date yet
+Any time you like you could probe for service presence, if service is ok it will response with
+standart presence stanza
     

@@ -19,53 +19,26 @@ NS_ADMIN = 'http://jabber.org/protocol/admin'
 CMD_ADMIN_USER_STATS = NS_ADMIN + '#user-stats'
 NODE_ONLINE_USERS = 'online users'
 
-PUB_NODE_LIVE = "presence/live" #node name where we publish items, not persitent, live flow
-PUB_NODE_ACTUAL = "presence/actual" #node name where all subitems displays current presence status, persistent
-PUB_NODE_STATUS = "presence/status" #node name we publish our status, like "initializing" or "online"
+PUB_NODE = "pubpresence" #node name where all subitems displays current presence status, persistent
 
 class PublishPresence(PresenceProtocol):  
     implements(IDisco)
-    
-    online = False
-    def __init__(self):
-        super(PublishPresence,self).__init__()
-        self.pending_init = set()
-        self.published_items = dict() #we store here publshed persist items
         
-    
     def connectionInitialized(self):
         super(PublishPresence,self).connectionInitialized()
         self.create_nodes()
-        self.announce_init() #publish initialazing event
-        self.make_uptodate()
+        self.initual_publish()
                 
     def create_nodes(self):
         """
         Creates and configures pubsub nodes
         
-        TODO: add configuration process, do not rely on default one
-        """
-        def configure_node_live(data):
+        TODO: configure security model
+        """            
+        def configure_node(data):
             request = PubSubRequestWithConf('configureSet')
             request.recipient = JID(self.pubsub_name)
-            request.nodeIdentifier = PUB_NODE_LIVE
-            request.sender = JID(self.name)
-            
-            frm = Form('submit')
-            frm.addField( Field(fieldType='hidden',var='FORM_TYPE',value=NS_PUBSUB_NODE_CONFIG) )
-            frm.addField( Field(var='pubsub#title',value='Live presence events') )
-            frm.addField( Field(var='pubsub#persist_items',value='0') )
-            frm.addField( Field(var='pubsub#deliver_payloads',value='1') )
-            frm.addField( Field(var='pubsub#send_last_published_item',value='never') )
-            frm.addField( Field(var='pubsub#presence_based_delivery',value='1') )
-            request.configureForm = frm
-                        
-            request.send(self.xmlstream)
-            
-        def configure_node_actual(data):
-            request = PubSubRequestWithConf('configureSet')
-            request.recipient = JID(self.pubsub_name)
-            request.nodeIdentifier = PUB_NODE_ACTUAL
+            request.nodeIdentifier = PUB_NODE
             request.sender = JID(self.name)
             
             frm = Form('submit')
@@ -78,54 +51,11 @@ class PublishPresence(PresenceProtocol):
             request.configureForm = frm
             request.send(self.xmlstream)
 
-        def configure_node_status(data):
-            request = PubSubRequestWithConf('configureSet')
-            request.recipient = JID(self.pubsub_name)
-            request.nodeIdentifier = PUB_NODE_STATUS
-            request.sender = JID(self.name)
-            
-            frm = Form('submit')
-            frm.addField( Field(fieldType='hidden',var='FORM_TYPE',value=NS_PUBSUB_NODE_CONFIG) )
-            frm.addField( Field(var='pubsub#title',value='Live presence events') )
-            frm.addField( Field(var='pubsub#persist_items',value='0') )
-            frm.addField( Field(var='pubsub#deliver_payloads',value='1') )
-            frm.addField( Field(var='pubsub#send_last_published_item',value='never') )
-            frm.addField( Field(var='pubsub#presence_based_delivery',value='1') )
-            request.configureForm = frm
-            request.send(self.xmlstream)
-
-
-        d = self.pubsub_client.createNode(JID(self.pubsub_name), PUB_NODE_LIVE, sender=JID(self.name))
-        d.addBoth(configure_node_live)
+        d = self.pubsub_client.createNode(JID(self.pubsub_name), PUB_NODE, sender=JID(self.name))
+        #if node is exist it's possible that we'll need to configure it anyway
+        d.addBoth(configure_node)
         
-        d = self.pubsub_client.createNode(JID(self.pubsub_name), PUB_NODE_ACTUAL, sender=JID(self.name))
-        d.addBoth(configure_node_actual)
-
-        d = self.pubsub_client.createNode(JID(self.pubsub_name), PUB_NODE_STATUS, sender=JID(self.name))
-        d.addBoth(configure_node_status)
-        
-    def announce_init(self):
-        self.online = False
-        
-        frm = Form('result')
-        frm.addField( Field(var='pubpresence#status',value='init') )
-        item = Item(payload=frm.toElement())
-        self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE_STATUS,items=[item],sender=JID(self.name))
-
-        
-    def announce_online(self):
-        self.online = True
-
-        frm = Form('result')
-        frm.addField( Field(var='pubpresence#status',value='online') )
-        item = Item(payload=frm.toElement())
-        self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE_STATUS,items=[item],sender=JID(self.name))
-   
-    def announce_online_when_ready(self,result):
-        if not self.pending_init:
-            self.announce_online()
-
-    def make_uptodate(self):
+    def initial_publish(self):
         """
         purges currently published items on persistent node, then asks all users to send presence data again
         """
@@ -133,14 +63,12 @@ class PublishPresence(PresenceProtocol):
         def process_online_users(items):
             for user in items:
                 self.probe(user.entity,sender=JID(self.name))
-                #we add all users which we ask for presence to get know 
-                #later when initializaton is finished
-                self.pending_init.add(user.entity.full()) 
 
         #purge all published items under persistent node
+        #client to this node will be notified about node purge
         request = PubSubRequestWithConf('purge')
         request.recipient = JID(self.pubsub_name)
-        request.nodeIdentifier = PUB_NODE_ACTUAL
+        request.nodeIdentifier = PUB_NODE
         request.sender = JID(self.name)
         d = request.send(self.xmlstream)
 
@@ -165,13 +93,8 @@ class PublishPresence(PresenceProtocol):
         self.unsubscribed(user,sender=component)
 
     def probeReceived(self, presence):
-        user,component = self._getParts(presence)
-        if self.online:
-            show=None
-        else:
-            show='dnd'
-            
-        self.available(user,show=show,sender=component)
+        user,component = self._getParts(presence)            
+        self.available(user,sender=component)
         
     def availableReceived(self, presence, show=None, statuses=None, priority=0):
         """
@@ -188,81 +111,37 @@ class PublishPresence(PresenceProtocol):
         TODO: handle situations when multiple connections of same user exist, 
               non-away connections should have higher priority
         """
-
-            
-        if not self.online:
-            try:
-                self.pending_init.remove(presence.sender.full())
-            except KeyError:
-                #FIXME: we probably somehere out of sync
-                pass
-            
         user = presence.sender
         comp_name = presence.recipient.userhost()
         domain = user.host
         
         status = presence.show or 'online'
-        d = self.presenceChanged(user,comp_name,domain,status)
-        
-        if not self.online and not self.pending_init:
-            d.addCallback(self.announce_online_when_ready)
+        self.presenceChanged(user,comp_name,domain,status)
         
     def unavailableReceived(self, presence):
         
-        if not self.online:
-            try:
-                self.pending_init.remove(presence.sender.full())
-            except KeyError:
-                #FIXME: we probably somehere out of sync
-                pass
-
         user = presence.sender
         comp_name = presence.recipient.userhost()
         domain = user.host
         status = 'offline'
-        d = self.presenceChanged(user,comp_name,domain,status)
+        self.presenceChanged(user,comp_name,domain,status)
         
-        if not self.online and not self.pending_init:
-            # user is goes out during our init process
-            d.addCallback(self.announce_online_when_ready)
-
     def presenceChanged(self,user,comp_name,domain,status):
         """
         Processs change of presence of user
-        
-        It publishes new event on "live" and "actual" node. If there was 
-        previously published item for same user then it first remove it.
-        If client app will connect and request "actual" list right before new item
-        published, but after old one was removed, then it'll get this event anyway from
-        live node. For that purposes it first do nesessary steps on "actual" node and
-        only when finish there it publish item on "live" node
+
+        It publshes items or pubsub node which should be persistent
+        Every item is published with id == username (jid without resource)
+        this means, that in case if update node will be atomaticaly
+        replaced with new value, no need to delete and recreate node
         """
-        
-        def store_persist(iq):
-            """
-            We store just published persist event ID here, to be able unpublish it when user goes offline
-            """
-            item = xpath.queryForNodes("//item",iq)
-            if not item:
-                return
-            item = item[0]['id']
-            name = user.userhost()
-            self.published_items[name] = item
-        
+                
         def process_newpresence(userstats):
             """
             publish new payload
             """
             
-            #delete previously published item if there was any
-            if userstats['name'] in self.published_items:
-                delreq = PubSubRequestWithConf('retract')
-                delreq.recipient = JID(self.pubsub_name)
-                delreq.nodeIdentifier = PUB_NODE_ACTUAL
-                delreq.sender = JID(self.name)
-                delreq.itemIdentifiers = [self.published_items[userstats['name']]]
-                delreq.send(self.xmlstream)
-
+            username = userstats['name']
             #make new item which would be published
             #TODO: serializing and deserializing should take place in separate func
             payload = domish.Element((None,"user"))
@@ -270,20 +149,19 @@ class PublishPresence(PresenceProtocol):
                 payload[k] = v
             payload['status'] = status
                         
-            item = Item(payload=payload)
+            item = Item(id=username,payload=payload)
 
-            #actually publish item on both nodes if not offline, otherwise publish only on "live" node
+            #publish node if not online, delete node otherwise
             if status != 'offline':
-                d = self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE_ACTUAL,items=[item],sender=JID(self.name))
-                d.addCallback(store_persist) #on callback we'll receive ID of published item
+                self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE,items=[item],sender=JID(self.name))
             else:
-                try:
-                    del self.published_items[userstats['name']]
-                except KeyError:
-                    pass #Something wrong, we out of sync somewhere
-                    
-            self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE_LIVE,items=[item],sender=JID(self.name))
-                        
+                request = PubSubRequestWithConf('retract')
+                request.recipient = JID(self.pubsub_name)
+                request.nodeIdentifier = PUB_NODE
+                request.sender = JID(self.name)
+                request.itemIdentifiers = [username]
+                request.send(self.xmlstream)
+        
         d = self.get_userstats(user,comp_name,domain)
         d.addCallback(process_newpresence)
         return d

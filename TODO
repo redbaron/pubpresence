@@ -2,3 +2,4 @@
 * Error handling if no rights
 * Intellectual behaviour in case of multiple connections
 * Move config to ini file, not plain Python
+* Configure security of pubsub nodes
