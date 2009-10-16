@@ -41,7 +41,7 @@ Published userinfo items
 ------------------------
 
 On pubsub nodes we publish items with this content (<item> tag is part of pubsub standart)::
-<item id='name@domain'><user status='online' ip='ip_addr' name='name@domain' fulljid='name@domain/resource'/></item>
+<item id='name@domain'><user status='online' ip='ip_addr' hostname='hostname' name='name@domain' fulljid='name@domain/resource'/></item>
 
 Where status could be one of:
  * online - plain online

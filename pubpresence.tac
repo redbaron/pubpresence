@@ -42,3 +42,4 @@ pubpresenceHandler.disco_client = discoClient
 
 discoHandler = DiscoHandler()
 discoHandler.setHandlerParent(pubpresenceComponent)
+

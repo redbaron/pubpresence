@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from zope.interface import implements
 from twisted.internet import defer
+from twisted.names import client
 from twisted.words.protocols.jabber.xmlstream import IQ
 from twisted.words.protocols.jabber.jid import JID
 from twisted.words.xish import xpath, domish
@@ -23,11 +24,13 @@ PUB_NODE = "pubpresence" #node name where all subitems displays current presence
 
 class PublishPresence(PresenceProtocol):  
     implements(IDisco)
-        
+    
+    dns_client = client.Resolver('/etc/resolv.conf')
+    
     def connectionInitialized(self):
         super(PublishPresence,self).connectionInitialized()
         self.create_nodes()
-        self.initual_publish()
+        self.initial_publish()
                 
     def create_nodes(self):
         """
@@ -135,35 +138,47 @@ class PublishPresence(PresenceProtocol):
         this means, that in case if update node will be atomaticaly
         replaced with new value, no need to delete and recreate node
         """
-                
-        def process_newpresence(userstats):
-            """
-            publish new payload
-            """
-            
+        
+        def process_dns(dnsresult,userstats):
+            try:
+                hostname = str(dnsresult[0][0].payload.name)
+            except:
+                #DNS error happens, publish empty hostname
+                hostname = ""
+
             username = userstats['name']
+            userstats['hostname'] = hostname
             #make new item which would be published
             #TODO: serializing and deserializing should take place in separate func
             payload = domish.Element((None,"user"))
             for k,v in userstats.items():
                 payload[k] = v
-            payload['status'] = status
-                        
+                
             item = Item(id=username,payload=payload)
+            self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE,items=[item],sender=JID(self.name))
+                       
+        def process_newpresence(userstats,status):
+            """
+            publish new payload
+            """            
+            userstats['status'] = status
 
-            #publish node if not online, delete node otherwise
-            if status != 'offline':
-                self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE,items=[item],sender=JID(self.name))
-            else:
+            #delete node if offline, resolve hostname add publish node otherwise
+            if status == 'offline':
                 request = PubSubRequestWithConf('retract')
                 request.recipient = JID(self.pubsub_name)
                 request.nodeIdentifier = PUB_NODE
                 request.sender = JID(self.name)
                 request.itemIdentifiers = [username]
                 request.send(self.xmlstream)
+            else:            
+                #build reverse ip name for DNS query
+                reverse_ip = '.'.join(userstats['ip'].split('.')[::-1])+'.in-addr.arpa.'
+                d = self.dns_client.lookupPointer(reverse_ip)
+                d.addBoth(process_dns,userstats)
         
         d = self.get_userstats(user,comp_name,domain)
-        d.addCallback(process_newpresence)
+        d.addCallback(process_newpresence,status)
         return d
         
     
