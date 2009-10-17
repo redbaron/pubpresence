@@ -146,7 +146,7 @@ class PublishPresence(PresenceProtocol):
                 #DNS error happens, publish empty hostname
                 hostname = ""
 
-            username = userstats['name']
+            username = userstats['username']
             userstats['hostname'] = hostname
             #make new item which would be published
             #TODO: serializing and deserializing should take place in separate func
@@ -211,7 +211,7 @@ class PublishPresence(PresenceProtocol):
             ip, port = ipport.split(':')
 
             userstats = dict()
-            userstats['name'] = jid.userhost()
+            userstats['username'] = jid.userhost()
             userstats['fulljid'] = jid.full() #full jid which causes current change, i.e. which is connestion actualy used
             userstats['ip'] = ip
             return userstats
