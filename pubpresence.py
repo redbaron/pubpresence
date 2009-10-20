@@ -20,7 +20,7 @@ NS_ADMIN = 'http://jabber.org/protocol/admin'
 CMD_ADMIN_USER_STATS = NS_ADMIN + '#user-stats'
 NODE_ONLINE_USERS = 'online users'
 
-PUB_NODE = "pubpresence" #node name where all subitems displays current presence status, persistent
+PUB_NODE = "/pubpresence" #node name where all subitems displays current presence status, persistent
 
 class PublishPresence(PresenceProtocol):  
     implements(IDisco)
@@ -50,7 +50,9 @@ class PublishPresence(PresenceProtocol):
             frm.addField( Field(var='pubsub#persist_items',value='1') )
             frm.addField( Field(var='pubsub#deliver_payloads',value='1') )
             frm.addField( Field(var='pubsub#send_last_published_item',value='never') )
-            frm.addField( Field(var='pubsub#presence_based_delivery',value='1') )
+            frm.addField( Field(var='pubsub#presence_based_delivery',value='0') )
+            frm.addField( Field(var='pubsub#access_model',value='open') )
+            frm.addField( Field(var='pubsub#node_type',value='leaf') )
             request.configureForm = frm
             request.send(self.xmlstream)
 
@@ -162,6 +164,7 @@ class PublishPresence(PresenceProtocol):
             publish new payload
             """            
             userstats['status'] = status
+            username = userstats['username']
 
             #delete node if offline, resolve hostname add publish node otherwise
             if status == 'offline':
