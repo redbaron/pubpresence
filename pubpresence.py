@@ -72,6 +72,7 @@ class PublishPresence(PresenceProtocol):
             log.msg("Sending probe to all online users")
             for user in items:
                 self.probe(user.entity,sender=JID(self.name))
+                self.available(user.entity,sender=JID(self.name))
 
         #purge all published items under persistent node
         #client to this node will be notified about node purge
