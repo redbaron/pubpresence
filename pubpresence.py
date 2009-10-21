@@ -174,27 +174,26 @@ class PublishPresence(PresenceProtocol):
             """            
             userstats['status'] = status
             username = userstats['username']
-
-            #delete node if offline, resolve hostname add publish node otherwise
-            if status == 'offline':
-                request = PubSubRequestWithConf('retract')
-                request.recipient = JID(self.pubsub_name)
-                request.nodeIdentifier = PUB_NODE
-                request.sender = JID(self.name)
-                request.itemIdentifiers = [username]
-                log.msg("User %s goes offline, retracting published node"%username)
-                request.send(self.xmlstream)
-            else:            
-                #build reverse ip name for DNS query
-                reverse_ip = '.'.join(userstats['ip'].split('.')[::-1])+'.in-addr.arpa.'
-                d = self.dns_client.lookupPointer(reverse_ip)
-                d.addBoth(process_dns,userstats)
         
-        d = self.get_userstats(user,comp_name,domain)
-        d.addCallback(process_newpresence,status)
-        return d
+            #build reverse ip name for DNS query
+            reverse_ip = '.'.join(userstats['ip'].split('.')[::-1])+'.in-addr.arpa.'
+            d = self.dns_client.lookupPointer(reverse_ip)
+            d.addBoth(process_dns,userstats)
+          
+        #simply delete node if user offline, request details otherwise
+        if status == 'offline':
+            username = user.userhost()
+            request = PubSubRequestWithConf('retract')
+            request.recipient = JID(self.pubsub_name)
+            request.nodeIdentifier = PUB_NODE
+            request.sender = JID(self.name)
+            request.itemIdentifiers = [username]
+            log.msg("User %s goes offline, retracting published node"%username)
+            request.send(self.xmlstream)
+        else:           
+            d = self.get_userstats(user,comp_name,domain)
+            d.addCallback(process_newpresence,status)        
         
-    
     def get_userstats(self,user,comp_name,domain):
         """
         Get stats of user. Accepts params:
