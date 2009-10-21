@@ -5,6 +5,7 @@ from twisted.names import client
 from twisted.words.protocols.jabber.xmlstream import IQ
 from twisted.words.protocols.jabber.jid import JID
 from twisted.words.xish import xpath, domish
+from twisted.python import log
 
 from wokkel.iwokkel import IDisco
 from wokkel.xmppim import PresenceProtocol, ProbePresence
@@ -53,6 +54,8 @@ class PublishPresence(PresenceProtocol):
             frm.addField( Field(var='pubsub#presence_based_delivery',value='0') )
             frm.addField( Field(var='pubsub#access_model',value='open') )
             frm.addField( Field(var='pubsub#node_type',value='leaf') )
+            frm.addField( Field(var='pubsub#max_items',value='100') )
+            
             request.configureForm = frm
             request.send(self.xmlstream)
 
@@ -66,6 +69,7 @@ class PublishPresence(PresenceProtocol):
         """
         
         def process_online_users(items):
+            log.msg("Sending probe to all online users")
             for user in items:
                 self.probe(user.entity,sender=JID(self.name))
 
@@ -77,6 +81,7 @@ class PublishPresence(PresenceProtocol):
         request.sender = JID(self.name)
         d = request.send(self.xmlstream)
 
+        log.msg("Requesting list of online users")
         d = self.disco_client.requestItems(JID(self.domain),NODE_ONLINE_USERS, sender=JID(self.name))
         d.addCallback(process_online_users)
 
@@ -121,6 +126,7 @@ class PublishPresence(PresenceProtocol):
         domain = user.host
         
         status = presence.show or 'online'
+        log.msg("Received status %s from %s"%(status,user.userhost()))
         self.presenceChanged(user,comp_name,domain,status)
         
     def unavailableReceived(self, presence):
@@ -129,6 +135,7 @@ class PublishPresence(PresenceProtocol):
         comp_name = presence.recipient.userhost()
         domain = user.host
         status = 'offline'
+        log.msg("Received status %s from %s"%(status,user.userhost()))
         self.presenceChanged(user,comp_name,domain,status)
         
     def presenceChanged(self,user,comp_name,domain,status):
@@ -157,6 +164,7 @@ class PublishPresence(PresenceProtocol):
                 payload[k] = v
                 
             item = Item(id=username,payload=payload)
+            log.msg("Publishing presence of %s"%username)
             self.pubsub_client.publish(JID("pubsub.%s"%self.domain),PUB_NODE,items=[item],sender=JID(self.name))
                        
         def process_newpresence(userstats,status):
@@ -173,6 +181,7 @@ class PublishPresence(PresenceProtocol):
                 request.nodeIdentifier = PUB_NODE
                 request.sender = JID(self.name)
                 request.itemIdentifiers = [username]
+                log.msg("User %s goes offline, retracting published node"%username)
                 request.send(self.xmlstream)
             else:            
                 #build reverse ip name for DNS query
