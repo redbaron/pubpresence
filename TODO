@@ -1,5 +1,5 @@
 * Logging
-* Error handling if no rights
+* Error handling if no rights or node settings (like max_items) are out of the borders
 * Intellectual behaviour in case of multiple connections
 * Move config to ini file, not plain Python
 * Configure security of pubsub nodes
